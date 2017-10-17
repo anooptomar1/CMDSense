@@ -135,8 +135,6 @@ class ViewController: UIViewController, ARSCNViewDelegate, CLLocationManagerDele
     }
     
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        
-        
         if measuringActive == true {
             placePoint(endValue)
             drawLine()
