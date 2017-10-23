@@ -20,8 +20,6 @@ class ViewController: UIViewController, ARSCNViewDelegate, CLLocationManagerDele
     @IBOutlet weak var crosshairImageView: UIImageView!
     @IBOutlet weak var headingLabel: UILabel!
     
-//    var startingLocation: CLLocationCoordinate2D = CLLocationCoordinate2D(latitude: <#T##CLLocationDegrees#>, longitude: CLLocationDegrees)
-    
     var locationManger: CLLocationManager!
     let session = ARSession()
     let sessionConfiguration = ARWorldTrackingConfiguration()
@@ -30,6 +28,7 @@ class ViewController: UIViewController, ARSCNViewDelegate, CLLocationManagerDele
     var startValue = SCNVector3()
     var endValue = SCNVector3()
     var dragOnInfinitePlanesEnables = false
+    var anchor: ARAnchor?
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -53,39 +52,10 @@ class ViewController: UIViewController, ARSCNViewDelegate, CLLocationManagerDele
         super.viewDidAppear(animated)
         UIApplication.shared.isIdleTimerDisabled = true
     }
-    
-    func setupScene() {
-        sceneView.delegate = self
-        sceneView.session = session
-        session.run(sessionConfiguration, options: [.removeExistingAnchors, .resetTracking])
-        resetValues()
-    }
-    
-    func resetValues() {
-        measuringActive = false
-        startValue = SCNVector3()
-        endValue = SCNVector3()
-        
-        updateResultLabel(0.0)
-    }
-    
-    func updateResultLabel(_ value:Float) {
-        let cm = value * 100.00
-        let inch = cm * (1/2.54)
-        measurementLabel.text = String(format: "%.2f cm / %.2f\"", cm, inch)
-    }
-    
-    func detectObjects() {
-        if let worldPosition = sceneView.rwVector(screenPosition: view.center) {
-//            errorLabel.isHidden = true
-            if measuringActive {
-                if startValue == vectorZero {
-                    startValue = worldPosition
-                }
-                endValue = worldPosition
-                updateResultLabel(startValue.distance(from: endValue))
-            }
-        }
+
+    // MARK: ARSCNViewDelegate
+    func renderer(_ renderer: SCNSceneRenderer, didAdd node: SCNNode, for anchor: ARAnchor) {
+        self.anchor = anchor
     }
     
     func renderer(_ renderer: SCNSceneRenderer, updateAtTime time: TimeInterval) {
@@ -94,15 +64,8 @@ class ViewController: UIViewController, ARSCNViewDelegate, CLLocationManagerDele
         }
     }
     
-    var anchor: ARAnchor?
-    
-    func renderer(_ renderer: SCNSceneRenderer, didAdd node: SCNNode, for anchor: ARAnchor) {
-        self.anchor = anchor
-    }
-    
     func session(_ session: ARSession, cameraDidChangeTrackingState camera: ARCamera) {
         var status = "Loading..."
-        
         switch camera.trackingState {
         case .normal:
             status = "Ready"
@@ -119,21 +82,15 @@ class ViewController: UIViewController, ARSCNViewDelegate, CLLocationManagerDele
         case .notAvailable:
             status = "Camera Tracking Not Available"
         }
-        
         errorLabel.text = status
     }
     
+    // MARK: CLLocationDelegate
     func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
         headingLabel.text = "\(Int(newHeading.trueHeading))°"
     }
     
-    func detectingWorldAnimation() {
-        self.detectingWorldLabel.alpha = 1.0
-        UIView.animate(withDuration: 0.5, delay: 0, options: [.repeat, .autoreverse], animations: { [weak self] in
-            self?.detectingWorldLabel.alpha = 0.0
-        }, completion: nil)
-    }
-    
+    // Start measuring distance
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         if measuringActive == true {
             placePoint(endValue)
@@ -143,12 +100,59 @@ class ViewController: UIViewController, ARSCNViewDelegate, CLLocationManagerDele
             print(startValue)
             placePoint(startValue)
         }
-
         resetValues()
         measuringActive = true
         crosshairImageView.image = CMDSenseStyleKit.imageOfCrosshair(selected: measuringActive)
     }
     
+    // MARK: Setup and draw world functions
+    
+    // Setup scene, clear out text labels
+    func setupScene() {
+        sceneView.delegate = self
+        sceneView.session = session
+        session.run(sessionConfiguration, options: [.removeExistingAnchors, .resetTracking])
+        resetValues()
+    }
+    
+    // Reset all measurment values
+    func resetValues() {
+        measuringActive = false
+        startValue = SCNVector3()
+        endValue = SCNVector3()
+        
+        updateResultLabel(0.0)
+    }
+    
+    // Update result label with cm and inch conversions
+    func updateResultLabel(_ value:Float) {
+        let cm = value * 100.00
+        let inch = cm * (1/2.54)
+        measurementLabel.text = String(format: "%.2f cm / %.2f\"", cm, inch)
+    }
+    
+    // Detect objects in world while measuring is active
+    func detectObjects() {
+        if let worldPosition = sceneView.rwVector(screenPosition: view.center) {
+            if measuringActive {
+                if startValue == vectorZero {
+                    startValue = worldPosition
+                }
+                endValue = worldPosition
+                updateResultLabel(startValue.distance(from: endValue))
+            }
+        }
+    }
+    
+    // Animate label if world is not detected, or if camera is obstructed
+    func detectingWorldAnimation() {
+        self.detectingWorldLabel.alpha = 1.0
+        UIView.animate(withDuration: 0.5, delay: 0, options: [.repeat, .autoreverse], animations: { [weak self] in
+            self?.detectingWorldLabel.alpha = 0.0
+            }, completion: nil)
+    }
+    
+    // Clear nodes from the scene
     @IBAction func clearNodes(_ sender: Any) {
         self.resetValues()
         sceneView.scene.rootNode.enumerateChildNodes { (node, stop) in
@@ -156,6 +160,7 @@ class ViewController: UIViewController, ARSCNViewDelegate, CLLocationManagerDele
         }
     }
     
+    // Place a point on the scene
     func placePoint(_ position:SCNVector3) {
         let pointShape = SCNSphere(radius: 0.005)
         let pointNode = SCNNode(geometry: pointShape)
@@ -163,6 +168,7 @@ class ViewController: UIViewController, ARSCNViewDelegate, CLLocationManagerDele
         sceneView.scene.rootNode.addChildNode(pointNode)
     }
     
+    // Draw a line from point a to point b
     func drawLine() {
         let line = SCNGeometry.lineFrom(vector: startValue, toVector: endValue)
         let lineNode = SCNNode(geometry: line)
@@ -170,18 +176,9 @@ class ViewController: UIViewController, ARSCNViewDelegate, CLLocationManagerDele
         
         let text = SCNText(string: "This is Text", extrusionDepth: 5.0)
         text.font = UIFont(name: "Helvetica Neue", size: 5)
-//        text.firstMaterial?.diffuse.contents = UIColor.white
-        
         let textNode = SCNNode(geometry: text)
         
         sceneView.scene.rootNode.addChildNode(textNode)
         sceneView.scene.rootNode.addChildNode(lineNode)
     }
-    
-    func clearPoints() {
-        sceneView.scene.rootNode.enumerateChildNodes { (node, stop) in
-            node.removeFromParentNode()
-        }
-    }
-    
 }

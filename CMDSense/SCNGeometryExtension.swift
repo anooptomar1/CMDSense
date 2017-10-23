@@ -9,6 +9,8 @@
 import SceneKit
 
 extension SCNGeometry {
+    
+    // Line from vector A to vector B
     class func lineFrom(vector vector1: SCNVector3, toVector vector2: SCNVector3) -> SCNGeometry {
         let indices: [Int32] = [0, 1]
         

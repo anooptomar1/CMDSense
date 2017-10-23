@@ -15,6 +15,7 @@ extension SCNVector3: Equatable {
         return SCNVector3Make(transform.columns.3.x, transform.columns.3.y, transform.columns.3.z)
     }
     
+    // Distance from vector
     func distance(from vector:SCNVector3) -> Float {
         let distanceX = powf((self.x - vector.x), 2.0)
         let distanceY = powf((self.y - vector.y), 2.0)
